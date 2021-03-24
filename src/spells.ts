@@ -18,7 +18,7 @@ export const flameShockTick: SpellTick = {
     name: "Flame Shock Tick",
     baseDamage: 834,
     spellDamageBonusPerc: 10,
-    totalTickingDurationMills: 18000
+    totalTickingDurationMills: 18000,
 }
 
 export const flameShock: Spell = {
@@ -29,7 +29,7 @@ export const flameShock: Spell = {
 }
 export const lightningBolt: Spell = {
     name: "Lightning Bolt",
-    castTimeMilliseconds: 2500,
+    castTimeMilliseconds: 2000, // 25000 without talent
     spellDamageBonusPerc: 91.43,
     baseDamage: 765
 }

@@ -1,6 +1,17 @@
 <script lang="ts">
+  import {
+    NumberInput,
+    Header,
+    Content,
+    Grid,
+    Row,
+    Column,
+    Tile,
+    Tag,
+  } from "carbon-components-svelte";
+  import { Button, FluidForm, DataTable } from "carbon-components-svelte";
   import { Engine } from "./engine";
-  import type { DamageTick } from "./engine";
+  import type { DirectDamageTick, DebuffDamageTick } from "./engine";
   import { orderBy } from "lodash";
 
   let durationInSeconds = 10;
@@ -14,8 +25,10 @@
   let resultTotalDamage = 0;
   let resultDps = 0;
 
-  let resultDamageTicks: DamageTick[] = [];
+  let resultDirectDamageTicks: DirectDamageTick[] = [];
+  let resultDebuffDamageTicks: DebuffDamageTick[] = [];
 
+  runButtonClick();
   function runButtonClick() {
     const engine = new Engine({
       bonusSpellDamage: bonusSpellDamage,
@@ -27,88 +40,110 @@
 
     engine.run(simulationDurationMs);
 
-    resultDamageTicks = orderBy(engine.damageTicks, "happenedAtMills");
-    resultTotalDamage = resultDamageTicks.reduce((a, b) => {
-      return a + b.damage;
-    }, 0);
-    resultDps = (resultTotalDamage / simulationDurationMs) * 1000;
+    resultDirectDamageTicks = engine.directSpellDamageTicks;
 
-    console.log(resultDamageTicks);
+    resultDebuffDamageTicks = orderBy(engine.debuffDamageTicks, "momentMS");
+
+    resultTotalDamage = engine.totalDamage;
+    resultDps = resultTotalDamage / (simulationDurationMs / 1000);
+    console.log(resultDirectDamageTicks);
   }
 </script>
 
 <main>
-  <h1>Shaman dps calculator</h1>
-  <table>
-    <tr>
-      <td>duration</td>
-      <td><input bind:value={durationInSeconds} /></td>
-    </tr>
-    <tr>
-      <td>crit rating</td>
-      <td><input bind:value={critRating} /></td>
-      <td>=</td>
-      <td>{critChancePerc.toFixed(1)}%</td>
-    </tr>
-    <tr>
-      <td>haste</td>
-      <td><input bind:value={hasteRating} /></td>
-      <td>=</td>
-      <td>{hasteMultiplier.toFixed(2)}</td>
-    </tr>
-    <tr>
-      <td>spell powa</td>
-      <td><input bind:value={bonusSpellDamage} /></td>
-    </tr>
-  </table>
-  <br />
-  <br /><button on:click={runButtonClick}>Run</button>
-  <br />
+  <Header platformName="Shaman dps calculator" />
+  <Content>
+    <div class="content-container">
+      <Grid noGutterLeft noGutterRight>
+        <Row style="margin-bottom: 10px">
+          <Column
+            ><NumberInput
+              bind:value={durationInSeconds}
+              label="Simulation Duration"
+            /></Column
+          >
+          <Column>
+            <NumberInput bind:value={critRating} label="Crit Rating" /></Column
+          >
+        </Row>
+        <Row>
+          <Column>
+            <NumberInput
+              bind:value={hasteRating}
+              label="Haste Rating"
+            /></Column
+          >
+          <Column>
+            <NumberInput
+              bind:value={bonusSpellDamage}
+              label="Bonus Spell Damage"
+            /></Column
+          >
+        </Row>
+      </Grid>
 
-  {#if resultTotalDamage}
-    <span>total damage: {resultTotalDamage.toFixed(0)}</span>
-  {/if}
+      <br />
+      <div style="display:flex; justify-content: space-between;">
+        <div><Button on:click={runButtonClick}>Run</Button></div>
 
-  {#if resultDps}
-    <span>total damage: {resultDps.toFixed(0)}</span>
-  {/if}
+        <Tile>
+          {#if resultTotalDamage}
+            <p>
+              total damage: <Tag type="blue">{resultTotalDamage.toFixed(0)}</Tag
+              >
+            </p>
+          {/if}
 
-  <ul>
-    {#each resultDamageTicks as tick}
-      <li>{tick.spell.name}</li>
-    {/each}
-  </ul>
+          {#if resultDps}
+            <p>dps: <Tag type="purple">{resultDps.toFixed(0)}</Tag></p>
+          {/if}
+        </Tile>
+      </div>
+
+      <br />
+
+      {#if resultDirectDamageTicks.length}
+        <DataTable
+          style="max-height: 300px; overflow:scroll"
+          headers={[
+            { key: "name", value: "Name" },
+            { key: "damage", value: "Damage" },
+            { key: "start", value: "Started Cast At" },
+            { key: "end", value: "Ended Cast At" },
+          ]}
+          rows={resultDirectDamageTicks.map((r) => ({
+            name: r.spell.name,
+            id: Math.random(),
+            damage: r.damage.toFixed(0),
+            start: r.castStartedAtMS.toFixed(0),
+            end: r.castEnedAtMS.toFixed(0),
+          }))}
+        />
+
+        <DataTable
+          style="max-height: 300px; overflow:scroll"
+          headers={[
+            { key: "name", value: "Name" },
+            { key: "damage", value: "Damage" },
+            { key: "momentMS", value: "Moment" },
+          ]}
+          rows={resultDebuffDamageTicks.map((r) => ({
+            name: r.spell.name,
+            id: Math.random(),
+            damage: r.damage.toFixed(0),
+            momentMS: r.momentMS.toFixed(0),
+          }))}
+        />
+      {/if}
+    </div>
+  </Content>
 </main>
 
 <style>
-  main {
-    text-align: center;
-    padding: 1em;
-    max-width: 240px;
-    margin: 0 auto;
-  }
+  @import "carbon-components-svelte/css/g10.css";
 
-  h1 {
-    font-size: 4em;
-    font-weight: 100;
-  }
-
-  @media (min-width: 640px) {
-    main {
-      max-width: none;
-    }
-  }
-
-  table {
-    display: inline;
-  }
-
-  td > input {
-    vertical-align: middle;
-    margin-bottom: 0;
-  }
-
-  ul {
-    width: 200px;
+  .content-container {
+    max-width: 700px;
+    margin: auto;
   }
 </style>

@@ -20,19 +20,29 @@ interface Debuff {
     endMills: number;
 }
 
-export interface DamageTick {
-    spell: Spell | SpellTick;
+export interface DirectDamageTick {
+    spell: Spell;
     damage: number;
     isCrit?: boolean;
-    happenedAtMills: number;
+    castStartedAtMS: number;
+    castEnedAtMS: number;
 };
+
+export interface DebuffDamageTick {
+    spell: SpellTick;
+    damage: number;
+    isCrit?: boolean;
+    momentMS: number;
+}
+
 
 export class Engine {
     private currentMills = 0;
     private currentTargetDebuffs: Debuff[] = [];
     private currentSpellCooldowns: SpellCooldown[] = [];
 
-    damageTicks: DamageTick[] = [];
+    directSpellDamageTicks: DirectDamageTick[] = [];
+    debuffDamageTicks: DebuffDamageTick[] = [];
 
     private GCDdurationMills: number;
 
@@ -56,8 +66,22 @@ export class Engine {
         return lightningBolt;
     }
 
+    get totalDamage() {
+        const directTotalDmg = this.directSpellDamageTicks.reduce((a, b) => {
+            return a + b.damage;
+        }, 0);
+        const tickTotalDmg = this.debuffDamageTicks.reduce((a, b) => {
+            return a + b.damage;
+        }, 0);
+
+
+        return directTotalDmg + tickTotalDmg
+    }
+
     run(durationMills: number) {
         while (this.currentMills < durationMills) {
+            // at this moment we are able to cast new spell
+
             this.currentSpellCooldowns = this.currentSpellCooldowns.filter(cd => cd.endMills > this.currentMills);
             this.currentTargetDebuffs = this.currentTargetDebuffs.filter(cd => cd.endMills > this.currentMills)
 
@@ -66,20 +90,21 @@ export class Engine {
             const damage = calculateSpellDamage(spellToCast, this.characterStats.bonusSpellDamage);
             const spellCastDurationMills = (spellToCast.castTimeMilliseconds || 0) / this.characterStats.hasteMultiplier;
 
-            this.damageTicks.push({ spell: spellToCast, damage, happenedAtMills: this.currentMills + spellCastDurationMills });
+            this.directSpellDamageTicks.push({ spell: spellToCast, damage, castStartedAtMS: this.currentMills, castEnedAtMS: this.currentMills + spellCastDurationMills });
 
             if (spellToCast === flameShock) {
                 const damage = calculateSpellDamage(flameShockTick, this.characterStats.bonusSpellDamage);
                 const damagePerTick = damage / 6;
                 const totalTickDurationMills = 18000 / this.characterStats.hasteMultiplier;
-                this.damageTicks.push(...[1, 2, 3, 4, 5, 6].map((num, idx) => {
-                    const tick: DamageTick = {
+                const ticks: DebuffDamageTick[] = [1, 2, 3, 4, 5, 6].map((num, idx) => {
+                    const tick: DebuffDamageTick = {
                         damage: damagePerTick,
                         spell: flameShockTick,
-                        happenedAtMills: this.currentMills + (idx + 1) * totalTickDurationMills / 6 / this.characterStats.hasteMultiplier
+                        momentMS: this.currentMills + (idx + 1) * totalTickDurationMills / 6 / this.characterStats.hasteMultiplier
                     };
                     return tick;
-                }))
+                })
+                this.debuffDamageTicks.push(...ticks);
                 this.currentTargetDebuffs.push({ tick: flameShockTick, endMills: this.currentMills + totalTickDurationMills })
             }
 
@@ -88,12 +113,11 @@ export class Engine {
             }
 
 
-            console.log("previous mils", this.currentMills, spellToCast);
             if (spellCastDurationMills < this.GCDdurationMills)
                 this.currentMills += this.GCDdurationMills;
             else this.currentMills += spellCastDurationMills
-            console.log("next mils", this.currentMills);
-
         }
+
+        this.directSpellDamageTicks = this.directSpellDamageTicks.filter(tick => tick.castEnedAtMS < durationMills)
     }
 }
